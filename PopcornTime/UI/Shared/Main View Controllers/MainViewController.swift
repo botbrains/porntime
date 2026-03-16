@@ -94,6 +94,15 @@ class MainViewController: UIViewController, CollectionViewControllerDelegate {
             #endif
         } else if let segue = segue as? AutoPlayStoryboardSegue,
             segue.identifier == "showMovie" || segue.identifier == "showShow",
+            let jackettMedia = sender as? JackettMedia {
+            // Jackett items go straight to playback — no detail screen needed.
+            if let torrent = jackettMedia.torrents.first {
+                AppDelegate.shared.play(jackettMedia, torrent: torrent)
+            }
+            // Cancel the segue's destination since we're handling it ourselves.
+            segue.destination.navigationController?.popViewController(animated: false)
+        } else if let segue = segue as? AutoPlayStoryboardSegue,
+            segue.identifier == "showMovie" || segue.identifier == "showShow",
             let media: Media = sender as? Movie ?? sender as? Show,
             let vc = storyboard?.instantiateViewController(withIdentifier: String(describing: DetailViewController.self)) as? DetailViewController {
             

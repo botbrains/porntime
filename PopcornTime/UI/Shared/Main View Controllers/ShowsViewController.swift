@@ -61,15 +61,15 @@ class ShowsViewController: MediaViewController {
         guard !collectionViewController.isLoading else { return }
         collectionViewController.isLoading = true
         collectionViewController.hasNextPage = false
-        PopcornKit.loadShows(page, filterBy: currentFilter, genre: currentGenre) { [unowned self] (shows, error) in
+        JackettManager.shared.load(page: page) { [unowned self] (results, error) in
             self.collectionViewController.isLoading = false
             
-            guard let shows = shows else { self.collectionViewController.error = error; self.collectionView?.reloadData(); return }
+            guard let results = results else { self.collectionViewController.error = error; self.collectionView?.reloadData(); return }
             
-            self.collectionViewController.dataSources[0] += shows as [AnyHashable]
+            self.collectionViewController.dataSources[0] += results as [AnyHashable]
             self.collectionViewController.dataSources[0].unique()
             
-            if shows.isEmpty // If the array passed in is empty, there are no more results so the content inset of the collection view is reset.
+            if results.isEmpty // If the array passed in is empty, there are no more results so the content inset of the collection view is reset.
             {
                 self.collectionView?.contentInset.bottom = self.tabBarController?.tabBar.frame.height ?? 0
             } else {

@@ -67,11 +67,34 @@ extension DownloadCollectionViewCell: CellCustomizing {
 
         if let image = download.mediaMetadata[MPMediaItemPropertyArtwork] as? String, let url = URL(string: image) {
             self.imageView?.af_setImage(withURL: url)
+        } else if download.downloadStatus == .finished {
+            // Generate a thumbnail from the downloaded video file
+            self.imageView?.image = UIImage(named: "Episode Placeholder")
+            self.loadVideoThumbnail(for: download)
         } else {
             self.imageView?.image = UIImage(named: "Episode Placeholder")
         }
 
         self.titleLabel?.text = download.mediaMetadata[MPMediaItemPropertyTitle] as? String
         self.blurView.isHidden = download.downloadStatus == .finished
+    }
+
+    /// Extracts and displays a thumbnail from the downloaded video file.
+    private func loadVideoThumbnail(for download: PTTorrentDownload) {
+        // Use the download's play handler to get the local video file URL,
+        // then generate a thumbnail from it.
+        download.play { [weak self] videoFileURL, videoFilePath in
+            guard let self = self else { return }
+
+            // Stop the playback server immediately — we only needed the file path
+            download.cancelStreamingAndDeleteData(false)
+
+            TorrentThumbnailGenerator.shared.thumbnail(for: download, videoFileURL: videoFilePath) { [weak self] image in
+                guard let self = self, let image = image else { return }
+                UIView.transition(with: self.imageView, duration: 0.3, options: .transitionCrossDissolve, animations: {
+                    self.imageView?.image = image
+                }, completion: nil)
+            }
+        }
     }
 }

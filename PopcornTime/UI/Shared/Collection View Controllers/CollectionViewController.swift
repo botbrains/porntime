@@ -164,17 +164,15 @@ class CollectionViewController: ResponsiveCollectionViewController, UICollection
                 
                 return header
             } else {
-                continueWatchingCollectionReusableView = continueWatchingCollectionReusableView ?? {
-                    let header = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: "stickyHeader", for: indexPath) as! ContinueWatchingCollectionReusableView
-                    if let parent = parent {
-                        header.type = type(of: parent) == MoviesViewController.self ? .movies : .episodes
-                    }
-                    return header
-                }()
+                let header = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: "stickyHeader", for: indexPath) as! ContinueWatchingCollectionReusableView
+                if header.type == nil, let parent = parent {
+                    header.type = type(of: parent) == MoviesViewController.self ? .movies : .episodes
+                }
                 
-                continueWatchingCollectionReusableView!.refreshOnDeck()
+                header.refreshOnDeck()
+                continueWatchingCollectionReusableView = header
                 
-                return continueWatchingCollectionReusableView!
+                return header
             }
         }
         return super.collectionView(collectionView, viewForSupplementaryElementOfKind: kind, at: indexPath)
@@ -217,6 +215,16 @@ class CollectionViewController: ResponsiveCollectionViewController, UICollection
         let item = dataSources[indexPath.section][indexPath.row]
 
         switch item {
+
+            case is JackettMedia:
+
+                cell = {
+
+                    let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "movieCell", for: indexPath) as! CoverCollectionViewCell
+                    cell.configureCellWith(item)
+
+                    return cell
+                }()
 
             case is Media:
 

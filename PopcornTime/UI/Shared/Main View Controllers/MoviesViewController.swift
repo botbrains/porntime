@@ -62,15 +62,15 @@ class MoviesViewController: MediaViewController {
         guard !collectionViewController.isLoading else { return }
         collectionViewController.isLoading = true
         collectionViewController.hasNextPage = false
-        PopcornKit.loadMovies(page, filterBy: currentFilter, genre: currentGenre) { [unowned self] (movies, error) in
+        JackettManager.shared.load(page: page) { [unowned self] (results, error) in
             self.collectionViewController.isLoading = false
             
-            guard let movies = movies else { self.collectionViewController.error = error; self.collectionView?.reloadData(); return }
+            guard let results = results else { self.collectionViewController.error = error; self.collectionView?.reloadData(); return }
             
-            self.collectionViewController.dataSources[0] += movies as [AnyHashable]
+            self.collectionViewController.dataSources[0] += results as [AnyHashable]
             self.collectionViewController.dataSources[0].unique()
             
-            if movies.isEmpty // If the array passed in is empty, there are no more results so the content inset of the collection view is reset.
+            if results.isEmpty // If the array passed in is empty, there are no more results so the content inset of the collection view is reset.
             {
                 self.collectionView?.contentInset.bottom = self.tabBarController?.tabBar.frame.height ?? 0
             } else {

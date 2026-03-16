@@ -135,6 +135,7 @@ extension DownloadViewController: CollectionViewControllerDelegate, DownloadColl
             alertController.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel, handler: nil))
             
             alertController.addAction(UIAlertAction(title: "Delete".localized, style: .destructive) { [unowned self] _ in
+                TorrentThumbnailGenerator.shared.removeThumbnail(for: download)
                 PTTorrentDownloadManager.shared().delete(download)
                 self.reloadData()
             })

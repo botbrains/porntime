@@ -7,6 +7,16 @@ class CoverCollectionViewCell: BaseCollectionViewCell {
     
     @IBOutlet var watchedIndicator: UIImageView?
     
+    /// Tracks the currently displayed media item to avoid stale async updates on reused cells.
+    private(set) var currentMedia: Media?
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        currentMedia = nil
+        imageView?.af_cancelImageRequest()
+        imageView?.image = nil
+    }
+    
     var watched = false {
         didSet {
             watchedIndicator?.isHidden = !watched
@@ -45,6 +55,7 @@ extension CoverCollectionViewCell: CellCustomizing {
 
         guard let media = item as? Media else { print(">>> initializing cell with invalid item"); return }
 
+        self.currentMedia = media
         let placeholder = media is Movie ? "Movie Placeholder" : "Episode Placeholder"
 
         self.titleLabel.text = media.title
@@ -57,6 +68,14 @@ extension CoverCollectionViewCell: CellCustomizing {
         if let image = media.smallCoverImage,
             let url = URL(string: image) {
             self.imageView.af_setImage(withURL: url, placeholderImage: UIImage(named: placeholder), imageTransition: .crossDissolve(.default))
+        } else if media is JackettMedia {
+            // No poster available from the feed — generate a styled title card
+            self.imageView.image = TitleCardGenerator.generateTitleCard(
+                for: media.title,
+                size: self.imageView.bounds.size.width > 0
+                    ? self.imageView.bounds.size
+                    : CGSize(width: 150, height: 225)
+            )
         } else {
             self.imageView.image = UIImage(named: placeholder)
         }
