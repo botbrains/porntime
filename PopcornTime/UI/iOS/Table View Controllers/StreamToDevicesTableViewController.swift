@@ -2,6 +2,12 @@
 
 import Foundation
 
+#if targetEnvironment(simulator)
+
+class StreamToDevicesTableViewController: GoogleCastTableViewController {}
+
+#else
+
 class StreamToDevicesTableViewController: GoogleCastTableViewController {
     
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -41,3 +47,5 @@ class StreamToDevicesTableViewController: GoogleCastTableViewController {
         return indexPath.section == 1 ? 44 : super.tableView(tableView, heightForRowAt: indexPath)
     }
 }
+
+#endif

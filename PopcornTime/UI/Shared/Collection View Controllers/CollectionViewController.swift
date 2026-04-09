@@ -1,5 +1,3 @@
-
-
 import Foundation
 import PopcornKit
 import class PopcornTorrent.PTTorrentDownload
@@ -9,7 +7,7 @@ protocol CellCustomizing {
     func configureCellWith<T>(_ item: T)
 }
 
-protocol CollectionViewControllerDelegate: class {
+protocol CollectionViewControllerDelegate: AnyObject {
     func load(page: Int)
     func didRefresh(collectionView: UICollectionView)
     func collectionView(isEmptyForUnknownReason collectionView: UICollectionView)
@@ -79,6 +77,8 @@ class CollectionViewController: ResponsiveCollectionViewController, UICollection
             let nib = delegate?.collectionView(nibForHeaderInCollectionView: collectionView) {
             collectionView.register(nib, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: "stickyHeader")
         }
+        
+        collectionView?.delegate = self
     }
     
     override func collectionViewDidReloadData(_ collectionView: UICollectionView) {
@@ -269,6 +269,14 @@ class CollectionViewController: ResponsiveCollectionViewController, UICollection
 
         cell.isDark = isDark
         
+        // Trigger pagination load if near end and conditions met
+        if paginated, !isLoading, hasNextPage {
+            let sectionCount = dataSources[safe: indexPath.section]?.count ?? 0
+            if indexPath.row >= sectionCount - 5 {
+                loadNextPageIfNeeded()
+            }
+        }
+        
         return cell
     }
     
@@ -300,4 +308,13 @@ class CollectionViewController: ResponsiveCollectionViewController, UICollection
         }
     }
     #endif
+    
+    private func loadNextPageIfNeeded() {
+        guard !isLoading, hasNextPage else { return }
+        
+        currentPage += 1
+        isLoading = true
+        delegate?.load(page: currentPage)
+    }
 }
+

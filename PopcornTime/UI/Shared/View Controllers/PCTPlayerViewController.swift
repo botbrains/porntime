@@ -9,7 +9,7 @@ import PopcornKit
 protocol PCTPlayerViewControllerDelegate: class {
     func playNext(_ episode: Episode)
     
-    #if os(iOS)
+    #if os(iOS) && !targetEnvironment(simulator)
         func playerViewControllerPresentCastPlayer(_ playerViewController: PCTPlayerViewController)
     #endif
 }

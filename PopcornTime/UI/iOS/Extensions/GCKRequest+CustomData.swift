@@ -1,6 +1,7 @@
 
 
 import Foundation
+#if !targetEnvironment(simulator)
 import GoogleCast.GCKRequest
 
 extension GCKRequest {
@@ -17,3 +18,4 @@ extension GCKRequest {
         }
     }
 }
+#endif

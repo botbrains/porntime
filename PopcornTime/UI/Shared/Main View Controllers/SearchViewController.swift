@@ -22,6 +22,7 @@ class SearchViewController: MainViewController, UISearchBarDelegate {
 
     let searchDelay: TimeInterval = 0.25
     var workItem: DispatchWorkItem!
+    private var activeSearchToken = UUID()
     
     var fetchType: Trakt.MediaType = .movies
     
@@ -39,6 +40,21 @@ class SearchViewController: MainViewController, UISearchBarDelegate {
     }
     
     func searchBar(_ searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
+        #if os(iOS)
+        if segmentedControl.numberOfSegments == 2 {
+            switch selectedScope {
+            case 0:
+                fetchType = .movies
+            case 1:
+                fetchType = .people
+            default:
+                return
+            }
+            filterSearchText(searchBar.text ?? "")
+            return
+        }
+        #endif
+
         switch selectedScope {
         case 0:
             fetchType = .movies
@@ -62,13 +78,21 @@ class SearchViewController: MainViewController, UISearchBarDelegate {
     }
     
     func filterSearchText(_ text: String) {
-        collectionViewController.isLoading = !text.isEmpty
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        activeSearchToken = UUID()
+        collectionViewController.error = nil
+        collectionViewController.isLoading = !query.isEmpty
         collectionViewController.dataSources = [[]]
         collectionView?.reloadData()
         
-        if text.isEmpty { return }
+        if query.isEmpty { return }
+
+        let searchToken = activeSearchToken
         
-        let completion: ([AnyHashable]?, NSError?) -> Void = { [unowned self] (data, error) in
+        let completion: ([AnyHashable]?, NSError?) -> Void = { [weak self] (data, error) in
+            guard let self = self, self.activeSearchToken == searchToken else { return }
+
             self.collectionViewController.dataSources = [data ?? []]
             self.collectionViewController.error = error
             self.collectionViewController.isLoading = false
@@ -77,16 +101,16 @@ class SearchViewController: MainViewController, UISearchBarDelegate {
         
         switch fetchType {
         case .movies:
-            PopcornKit.loadMovies(searchTerm: text) {arg1,arg2 in
-                completion(arg1, arg2)
+            JackettManager.shared.load(page: 1, query: query) { results, error in
+                completion(results?.map(AnyHashable.init), error)
             }
         case .shows:
-            PopcornKit.loadShows(searchTerm: text) {arg1,arg2 in
-                completion(arg1, arg2)
+            JackettManager.shared.load(page: 1, query: query) { results, error in
+                completion(results?.map(AnyHashable.init), error)
             }
         case .people:
-            TraktManager.shared.search( forPerson: text) {arg1,arg2 in
-                completion(arg1 as! [Crew], arg2)
+            TraktManager.shared.search( forPerson: query) { people, error in
+                completion(people as? [AnyHashable], error)
             }
         default:
             return

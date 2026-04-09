@@ -134,11 +134,13 @@ extension AppDelegate: PCTPlayerViewControllerDelegate, UIViewControllerTransiti
             media.subtitles = subtitles
             #if os(iOS)
                 
+            #if !targetEnvironment(simulator)
             if GCKCastContext.sharedInstance().castState == .connected {
                 let playViewController = storyboard.instantiateViewController(withIdentifier: "CastPlayerViewController") as! CastPlayerViewController
                 media.playOnChromecast(fromFileOrMagnetLink: torrent.url, loadingViewController: loadingViewController, playViewController: playViewController, progress: currentProgress, errorBlock: error, finishedLoadingBlock: finishedLoading)
                 return
             }
+            #endif
             #endif
                 
             let playViewController = storyboard.instantiateViewController(withIdentifier: "PCTPlayerViewController") as! PCTPlayerViewController
@@ -197,7 +199,7 @@ extension AppDelegate: PCTPlayerViewControllerDelegate, UIViewControllerTransiti
     
     // MARK: - PCTPlayerViewControllerDelegate
     
-    #if os(iOS)
+    #if os(iOS) && !targetEnvironment(simulator)
     
     func playerViewControllerPresentCastPlayer(_ playerViewController: PCTPlayerViewController) {
         dismiss(animated: true) { [unowned self] in

@@ -1,6 +1,18 @@
 
 
 import UIKit
+#if targetEnvironment(simulator)
+
+protocol GoogleCastTableViewControllerDelegate: AnyObject {
+    func didConnectToDevice()
+}
+
+class GoogleCastTableViewController: UITableViewController {
+    weak var delegate: GoogleCastTableViewControllerDelegate?
+}
+
+#else
+
 import GoogleCast
 import PopcornKit
 
@@ -231,3 +243,5 @@ class GoogleCastTableViewController: UITableViewController, GCKDiscoveryManagerL
     }
     
 }
+
+#endif

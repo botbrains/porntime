@@ -2,9 +2,23 @@
 
 import UIKit
 import PopcornTorrent
-import GoogleCast
 import PopcornKit
 import GCDWebServer
+
+#if targetEnvironment(simulator)
+
+class CastPlayerViewController: UIViewController {
+    var media: Media!
+    var directory: URL!
+    var url: URL!
+    var streamer: PTTorrentStreamer!
+    var localPathToMedia: URL!
+    var startPosition: TimeInterval = 0.0
+}
+
+#else
+
+import GoogleCast
 
 class CastPlayerViewController: UIViewController, GCKRemoteMediaClientListener, GCKRequestDelegate {
     
@@ -346,3 +360,5 @@ class CastPlayerViewController: UIViewController, GCKRemoteMediaClientListener, 
         return UIDevice.current.userInterfaceIdiom == .pad
     }
 }
+
+#endif

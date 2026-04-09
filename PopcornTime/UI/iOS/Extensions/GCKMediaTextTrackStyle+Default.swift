@@ -1,6 +1,7 @@
 
 
 import Foundation
+#if !targetEnvironment(simulator)
 import GoogleCast.GCKMediaTextTrackStyle
 
 extension GCKMediaTextTrackStyle {
@@ -40,3 +41,4 @@ extension GCKMediaTextTrackStyle {
         return self
     }
 }
+#endif

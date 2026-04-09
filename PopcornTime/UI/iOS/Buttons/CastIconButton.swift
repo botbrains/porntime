@@ -1,11 +1,22 @@
 
 
 import UIKit
+
+#if targetEnvironment(simulator)
+enum CastState {
+    case noDevicesAvailable
+    case notConnected
+    case connecting
+    case connected
+}
+#else
 import GoogleCast.GCKCommon
+typealias CastState = GCKCastState
+#endif
 
 class CastIconButton: UIButton {
     
-    var status: GCKCastState = .noDevicesAvailable {
+    var status: CastState = .noDevicesAvailable {
         didSet {
             switch status {
             case .noDevicesAvailable:
@@ -23,8 +34,10 @@ class CastIconButton: UIButton {
                 isHidden = false
                 imageView!.stopAnimating()
                 setImage(castOn, for: .normal)
+#if !targetEnvironment(simulator)
             @unknown default:
                 break;
+#endif
             }
             
         }

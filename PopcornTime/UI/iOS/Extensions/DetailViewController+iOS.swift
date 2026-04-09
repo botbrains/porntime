@@ -22,8 +22,12 @@ extension DetailViewController {
         watchedButton.setImage(watchedButtonImage, for: .normal)
         watchlistButton.setImage(watchlistButtonImage, for: .normal)
         
+        #if !targetEnvironment(simulator)
         NotificationCenter.default.addObserver(self, selector: #selector(updateCastStatus), name: .gckCastStateDidChange, object: nil)
         updateCastStatus()
+        #else
+        castButton?.isHidden = true
+        #endif
         scrollViewDidScroll(scrollView) // Update the hidden status of UINavigationBar.
         
         scrollView.contentInset.bottom = tabBarController?.tabBar.frame.height ?? 0
@@ -81,7 +85,9 @@ extension DetailViewController {
     }
     
     @objc func updateCastStatus() {
+        #if !targetEnvironment(simulator)
         castButton?.status = GCKCastContext.sharedInstance().castState
+        #endif
     }
     
     override func viewDidLayoutSubviews() {

@@ -131,9 +131,11 @@ extension PCTPlayerViewController: UIPopoverPresentationControllerDelegate, Goog
     // MARK: - GoogleCastTableViewControllerDelegate
     
     func didConnectToDevice() {
+#if !targetEnvironment(simulator)
         mediaplayer.delegate = nil
         mediaplayer.stop()
         delegate?.playerViewControllerPresentCastPlayer(self)
+#endif
     }
     
     // MARK: - Navigation

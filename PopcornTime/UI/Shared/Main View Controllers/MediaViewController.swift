@@ -18,7 +18,7 @@ class MediaViewController: MainViewController {
         let handler: ((UIAlertAction) -> Void) = { (handler) in
             self.currentGenre = NetworkManager.Genres.array.first(where: {$0.string == handler.title!})!
             if self.currentGenre == .all {
-                self.navigationItem.title = (self is MoviesViewController ? "Movies" : "Shows").localized
+                self.navigationItem.title = (self is MoviesViewController ? "Library" : "Shows").localized
             } else {
                self.navigationItem.title = self.currentGenre.string
             }

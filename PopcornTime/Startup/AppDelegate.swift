@@ -7,7 +7,9 @@ import ObjectMapper
 
 #if os(iOS)
     import AlamofireNetworkActivityIndicator
-    import GoogleCast
+    #if !targetEnvironment(simulator)
+        import GoogleCast
+    #endif
 #endif
 
 #if os(tvOS)
@@ -65,10 +67,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UITabBarControllerDelegat
         #elseif os(iOS)
             NetworkActivityIndicatorManager.shared.isEnabled = true
             
+#if !targetEnvironment(simulator)
             // SDK throws error if shared instance has already been initialised and doesn't mark function as throwing on Swift. Although this produces a compile time warning, it is necessary for the app to not crash while running on an actual device and should not be removed.
              GCKCastContext.setSharedInstanceWith(GCKCastOptions(discoveryCriteria: GCKDiscoveryCriteria(applicationID: kGCKDefaultMediaReceiverApplicationID)))
+#endif
         
             tabBarController.delegate = self
+            configureUnifiedJackettLibrary()
 
         #endif
         
@@ -91,6 +96,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UITabBarControllerDelegat
         
         return true
     }
+
+    #if os(iOS)
+    private func configureUnifiedJackettLibrary() {
+        guard let viewControllers = tabBarController.viewControllers else { return }
+
+        let filteredViewControllers = viewControllers.filter { viewController in
+            guard let navigationController = viewController as? UINavigationController else { return true }
+            return !navigationController.viewControllers.contains(where: { $0 is ShowsViewController })
+        }
+
+        if filteredViewControllers.count != viewControllers.count {
+            tabBarController.viewControllers = filteredViewControllers
+        }
+
+        guard let selectedViewControllers = tabBarController.viewControllers else { return }
+        for navigationController in selectedViewControllers.compactMap({ $0 as? UINavigationController }) {
+            guard navigationController.viewControllers.contains(where: { $0 is MoviesViewController }) else { continue }
+            navigationController.tabBarItem.title = "Library".localized
+            if let moviesViewController = navigationController.viewControllers.first(where: { $0 is MoviesViewController }) {
+                moviesViewController.title = "Library".localized
+                moviesViewController.navigationItem.title = "Library".localized
+            }
+            break
+        }
+    }
+    #endif
     
     func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
         if tabBarController.selectedViewController == viewController, let scrollView = viewController.view.recursiveSubviews.compactMap({$0 as? UIScrollView}).first {

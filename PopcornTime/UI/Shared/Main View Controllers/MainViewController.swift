@@ -1,5 +1,3 @@
-
-
 import UIKit
 import PopcornKit
 import PopcornTorrent.PTTorrentDownloadManager
@@ -7,7 +5,38 @@ import MediaPlayer.MPMediaItem
 
 class MainViewController: UIViewController, CollectionViewControllerDelegate {
     
-    func load(page: Int) {}
+    var allJackettResults: [JackettMedia] = []
+    let pageSize = 50
+    var isLoadingMore = false
+    var hasNextPage = true
+    var currentPage = 1
+    
+    func load(page: Int) {
+        if page == 1 {
+            allJackettResults = []
+            hasNextPage = true
+            currentPage = 1
+        }
+        guard !isLoadingMore && hasNextPage else { return }
+        isLoadingMore = true
+        
+        JackettManager.shared.load(page: page) { [weak self] (result, error) in
+            guard let self = self else { return }
+            if page == 1 {
+                self.allJackettResults = result ?? []
+            } else {
+                if let result = result {
+                    self.allJackettResults.append(contentsOf: result)
+                }
+            }
+            self.hasNextPage = (result?.count ?? 0) >= self.pageSize
+            self.currentPage = page
+            self.collectionViewController.dataSources = [self.allJackettResults]
+            self.collectionView?.reloadData()
+            self.isLoadingMore = false
+        }
+    }
+    
     func collectionView(isEmptyForUnknownReason collectionView: UICollectionView) {}
     func collectionView(_ collectionView: UICollectionView, titleForHeaderInSection section: Int) -> String? { return nil }
     func collectionView(nibForHeaderInCollectionView collectionView: UICollectionView) -> UINib? { return nil }
@@ -80,6 +109,7 @@ class MainViewController: UIViewController, CollectionViewControllerDelegate {
     }
     
     func didRefresh(collectionView: UICollectionView) {
+        allJackettResults = []
         collectionViewController.dataSources = [[]]
         collectionView.reloadData()
         load(page: 1)

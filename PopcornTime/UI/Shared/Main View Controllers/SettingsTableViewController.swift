@@ -87,7 +87,8 @@ class SettingsTableViewController: UITableViewController, TraktManagerDelegate {
                 
                 let bundle = Bundle.main
                 let version = [bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString"), bundle.object(forInfoDictionaryKey: "CFBundleVersion")].compactMap({$0 as? String}).joined(separator: ".")
-                cell.detailTextLabel?.text = version
+                let usingCustomEndpoint = JackettConfiguration.endpointTemplate != JackettConfiguration.defaultEndpointTemplate
+                cell.detailTextLabel?.text = usingCustomEndpoint ? "\(version) • API" : version
             }
         default:
             break
@@ -341,9 +342,48 @@ class SettingsTableViewController: UITableViewController, TraktManagerDelegate {
                         tableView.reloadData() 
                     }
                 }
+            } else if indexPath.row == 2 {
+                presentJackettEndpointEditor()
             }
         default:
             break
         }
+    }
+
+    private func presentJackettEndpointEditor() {
+        let alert = UIAlertController(title: "Jackett Endpoint".localized,
+                                      message: "Set the full Torznab endpoint template used for custom library content.".localized,
+                                      preferredStyle: .alert)
+
+        alert.addTextField { textField in
+            textField.text = JackettConfiguration.endpointTemplate
+            textField.placeholder = JackettConfiguration.defaultEndpointTemplate
+            textField.autocapitalizationType = .none
+            textField.autocorrectionType = .no
+            textField.keyboardType = .URL
+            textField.clearButtonMode = .whileEditing
+        }
+
+        alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel, handler: nil))
+        alert.addAction(UIAlertAction(title: "Reset".localized, style: .destructive, handler: { [weak self] _ in
+            JackettConfiguration.resetToDefault()
+            self?.tableView.reloadData()
+        }))
+        alert.addAction(UIAlertAction(title: "Save".localized, style: .default, handler: { [weak self] _ in
+            let value = alert.textFields?.first?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard URLComponents(string: value)?.url != nil else {
+                let errorAlert = UIAlertController(title: "Invalid URL".localized,
+                                                   message: "Please enter a valid Jackett endpoint URL.".localized,
+                                                   preferredStyle: .alert)
+                errorAlert.addAction(UIAlertAction(title: "OK".localized, style: .default, handler: nil))
+                self?.present(errorAlert, animated: true)
+                return
+            }
+
+            JackettConfiguration.endpointTemplate = value
+            self?.tableView.reloadData()
+        }))
+
+        present(alert, animated: true)
     }
 }

@@ -1,356 +1,77 @@
-
 import Foundation
 import ObjectMapper
-import MediaPlayer.MPMediaItem
 import PopcornKit
+import MediaPlayer.MPMediaItem
 
-// MARK: - Jackett Result Model
+struct JackettConfiguration {
+    static let endpointTemplateKey = "jackett.endpointTemplate"
 
-/// A single torrent result from the Jackett indexer feed.
-/// Conforms to `Media` so it slots directly into the existing CollectionViewController pipeline.
-public struct JackettMedia: Media, Equatable, Hashable {
-    
-    public let title: String
-    public let id: String
-    public var tmdbId: Int?
-    public let slug: String
-    public let summary: String
-    
-    public var smallBackgroundImage: String? { return nil }
-    public var mediumBackgroundImage: String? { return nil }
-    public var largeBackgroundImage: String?
-    public var smallCoverImage: String? { return posterURL }
-    public var mediumCoverImage: String? { return posterURL }
-    public var largeCoverImage: String?
-    
-    /// Poster/thumbnail URL extracted from the Jackett feed, if available.
-    public var posterURL: String?
-    
-    public var subtitles = Dictionary<String, [Subtitle]>()
-    public var torrents = [Torrent]()
-    
-    public var isWatched: Bool {
-        get { return false }
-        set {}
+    static let defaultEndpointTemplate = "http://192.168.1.178:9117/api/v2.0/indexers/gay-torrents/results/torznab/api?apikey=18q4a844kahn5ozaes7nowzfs7nbemt3&t=search&cat=&q="
+
+    static var endpointTemplate: String {
+        get {
+            return defaultEndpointTemplate
+        }
+        set {
+            // Intentionally ignored: endpoint is hardcoded for this build.
+        }
     }
-    
-    public var isAddedToWatchlist: Bool {
-        get { return false }
-        set {}
+
+    static func resetToDefault() {
+        // Intentionally no-op: endpoint is hardcoded for this build.
     }
-    
-    /// The raw magnet link or .torrent URL from the Jackett feed.
-    public let magnetLink: String
-    public let seeders: Int
-    public let leechers: Int
-    public let sizeBytes: Int64
-    public let publishDate: Date?
-    
-    // MARK: - Mappable conformance (required by Media protocol)
-    
-    public init?(map: Map) {
-        return nil // We don't construct these from ObjectMapper JSON.
-    }
-    
-    public mutating func mapping(map: Map) {
-        // No-op — we build these from XML, not ObjectMapper.
-    }
-    
-    // MARK: - MPMediaItem dictionary conformance (required by Media protocol)
-    
-    public var mediaItemDictionary: [String: Any] {
-        return [
-            MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyMediaType: NSNumber(value: MPMediaType.movie.rawValue),
-            MPMediaItemPropertyPersistentID: id,
-            MPMediaItemPropertyArtwork: "",
-            MPMediaItemPropertyBackgroundArtwork: "",
-            MPMediaItemPropertySummary: summary
-        ]
-    }
-    
-    public init?(_ mediaItemDictionary: [String: Any]) {
-        guard
-            let id = mediaItemDictionary[MPMediaItemPropertyPersistentID] as? String,
-            let title = mediaItemDictionary[MPMediaItemPropertyTitle] as? String,
-            let summary = mediaItemDictionary[MPMediaItemPropertySummary] as? String
-        else {
+
+    static func makeFeedURL(page: Int, query: String, limit: Int) -> URL? {
+        var template = endpointTemplate
+        if template.contains(" ") {
+            template = template.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? template
+        }
+
+        guard var components = URLComponents(string: template) else {
             return nil
         }
-        self.init(title: title, id: id, magnetLink: "", seeders: 0, leechers: 0, sizeBytes: 0, summary: summary)
-    }
-    
-    // MARK: - Primary initializer
-    
-    public init(title: String,
-                id: String,
-                magnetLink: String,
-                seeders: Int,
-                leechers: Int,
-                sizeBytes: Int64,
-                publishDate: Date? = nil,
-                summary: String = "",
-                posterURL: String? = nil) {
-        self.title = title
-        self.id = id
-        self.slug = title.slugged
-        self.magnetLink = magnetLink
-        self.seeders = seeders
-        self.leechers = leechers
-        self.sizeBytes = sizeBytes
-        self.publishDate = publishDate
-        self.summary = summary.isEmpty ? JackettMedia.buildSummary(seeders: seeders, leechers: leechers, size: sizeBytes) : summary
-        self.posterURL = posterURL
-        
-        // Build the single torrent entry that the playback pipeline needs.
-        let quality = JackettMedia.extractQuality(from: title)
-        let health: Health = seeders > 10 ? .excellent : (seeders > 3 ? .good : .bad)
-        let torrent = Torrent(health: health,
-                              url: magnetLink,
-                              quality: quality,
-                              seeds: seeders,
-                              peers: leechers,
-                              size: JackettMedia.formatSize(sizeBytes))
-        self.torrents = [torrent]
-    }
-    
-    // MARK: - Hashable / Equatable
-    
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    public static func == (lhs: JackettMedia, rhs: JackettMedia) -> Bool {
-        return lhs.id == rhs.id
-    }
-    
-    // MARK: - Helpers
-    
-    private static func extractQuality(from title: String) -> String {
-        for p in ["2160p", "1080p", "720p", "480p"] {
-            if title.localizedCaseInsensitiveContains(p) { return p }
+
+        var queryDict = [String: String]()
+        for item in components.queryItems ?? [] {
+            queryDict[item.name] = item.value ?? ""
         }
-        return "Unknown"
-    }
-    
-    static func formatSize(_ bytes: Int64) -> String? {
-        guard bytes > 0 else { return nil }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
-    }
-    
-    private static func buildSummary(seeders: Int, leechers: Int, size: Int64) -> String {
-        var parts = [String]()
-        parts.append("\(seeders) seed\(seeders == 1 ? "" : "s")")
-        parts.append("\(leechers) peer\(leechers == 1 ? "" : "s")")
-        if let sizeStr = formatSize(size) {
-            parts.append(sizeStr)
-        }
-        return parts.joined(separator: " · ")
+
+        queryDict["q"] = query
+        queryDict["limit"] = String(limit)
+        queryDict["offset"] = String(max((page - 1) * limit, 0))
+
+        components.queryItems = queryDict.map { URLQueryItem(name: $0.key, value: $0.value) }
+            .sorted(by: { $0.name < $1.name })
+
+        return components.url
     }
 }
-
-// MARK: - Jackett Torznab XML Parser
-
-final class JackettXMLParser: NSObject, XMLParserDelegate {
-    
-    private let data: Data
-    private var results: [JackettMedia] = []
-    
-    // Parsing state
-    private var currentElement = ""
-    private var currentTitle = ""
-    private var currentLink = ""
-    private var currentSeeders = 0
-    private var currentLeechers = 0
-    private var currentSize: Int64 = 0
-    private var currentPubDate = ""
-    private var currentDescription = ""
-    private var currentPosterURL = ""
-    private var inItem = false
-    
-    init(data: Data) {
-        self.data = data
-    }
-    
-    func parse() -> [JackettMedia] {
-        let parser = XMLParser(data: data)
-        parser.delegate = self
-        parser.parse()
-        return results
-    }
-    
-    // MARK: - XMLParserDelegate
-    
-    func parser(_ parser: XMLParser,
-                didStartElement elementName: String,
-                namespaceURI: String?,
-                qualifiedName: String?,
-                attributes: [String: String] = [:]) {
-        currentElement = elementName
-        
-        if elementName == "item" {
-            inItem = true
-            currentTitle = ""
-            currentLink = ""
-            currentSeeders = 0
-            currentLeechers = 0
-            currentSize = 0
-            currentPubDate = ""
-            currentDescription = ""
-            currentPosterURL = ""
-        }
-        
-        // Torznab extended attributes: <torznab:attr name="seeders" value="42"/>
-        let isAttr = elementName == "torznab:attr" || elementName == "attr"
-        if isAttr, let name = attributes["name"], let value = attributes["value"] {
-            switch name {
-            case "seeders":  currentSeeders = Int(value) ?? 0
-            case "peers":    currentLeechers = Int(value) ?? 0
-            case "size":     currentSize = Int64(value) ?? 0
-            case "magneturl":
-                // Some indexers put the magnet in a torznab attr instead of <link>
-                if !value.isEmpty { currentLink = value }
-            case "coverurl", "poster", "banner", "coverimage":
-                // Some indexers provide cover art via Torznab attributes
-                if !value.isEmpty && currentPosterURL.isEmpty { currentPosterURL = value }
-            default: break
-            }
-        }
-        
-        // <enclosure> tag may carry the .torrent URL + length
-        if elementName == "enclosure" {
-            if let url = attributes["url"], currentLink.isEmpty {
-                currentLink = url
-            }
-            if let length = attributes["length"], let len = Int64(length), currentSize == 0 {
-                currentSize = len
-            }
-        }
-    }
-    
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
-        guard inItem else { return }
-        switch currentElement {
-        case "title":       currentTitle += string
-        case "link":        currentLink += string
-        case "pubDate":     currentPubDate += string
-        case "description": currentDescription += string
-        default: break
-        }
-    }
-    
-    func parser(_ parser: XMLParser,
-                didEndElement elementName: String,
-                namespaceURI: String?,
-                qualifiedName: String?) {
-        guard elementName == "item" else { return }
-        inItem = false
-        
-        let title = currentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let link  = currentLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        guard !title.isEmpty, !link.isEmpty else { return }
-        
-        // Use a stable ID derived from the magnet link / torrent URL
-        let id = String(link.hashValue)
-        
-        // Resolve poster URL: prefer Torznab attribute, fall back to <img> in description HTML
-        var poster: String? = currentPosterURL.isEmpty ? nil : currentPosterURL
-        if poster == nil {
-            poster = JackettXMLParser.extractImageURL(from: currentDescription)
-        }
-        
-        let media = JackettMedia(
-            title: title,
-            id: id,
-            magnetLink: link,
-            seeders: currentSeeders,
-            leechers: currentLeechers,
-            sizeBytes: currentSize,
-            publishDate: JackettXMLParser.parseDate(currentPubDate),
-            posterURL: poster
-        )
-        results.append(media)
-    }
-    
-    /// Extracts the first image URL from an HTML string (typically a `<description>` field).
-    /// Handles both `<img src="...">` tags and bare image URLs.
-    private static func extractImageURL(from html: String) -> String? {
-        // Try <img src="..."> or <img src='...'>
-        let imgPattern = "<img[^>]+src\\s*=\\s*[\"']([^\"']+)[\"']"
-        if let regex = try? NSRegularExpression(pattern: imgPattern, options: .caseInsensitive),
-           let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
-           let range = Range(match.range(at: 1), in: html) {
-            let url = String(html[range])
-            if url.hasPrefix("http") { return url }
-        }
-        
-        // Try bare image URL in the text
-        let urlPattern = "(https?://[^\\s<>\"']+\\.(?:jpg|jpeg|png|gif|webp))"
-        if let regex = try? NSRegularExpression(pattern: urlPattern, options: .caseInsensitive),
-           let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
-           let range = Range(match.range(at: 1), in: html) {
-            return String(html[range])
-        }
-        
-        return nil
-    }
-    
-    private static let dateFormatter: DateFormatter = {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        // Standard RSS / Torznab date format
-        fmt.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
-        return fmt
-    }()
-    
-    private static func parseDate(_ string: String) -> Date? {
-        return dateFormatter.date(from: string.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-}
-
-// MARK: - Jackett Network Manager
 
 class JackettManager {
-    
+
     static let shared = JackettManager()
-    
-    /// The full Torznab API endpoint for your Jackett indexer.
-    let feedURL = "http://ec2-3-107-243-189.ap-southeast-2.compute.amazonaws.com:9117/api/v2.0/indexers/gay-torrents/results/torznab/api"
-    let apiKey  = "2ulqmhijd4c15x3hd3ftm4zmmbnlvkg0"
-    
+
     private init() {}
-    
+
     /// Fetches the feed. Pass a search query (empty string = browse recent).
     /// Pagination is handled via `offset` (page * limit).
     func load(page: Int,
               query: String = "",
               limit: Int = 50,
               completion: @escaping ([JackettMedia]?, NSError?) -> Void) {
-        
-        var components = URLComponents(string: feedURL)!
-        let queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "apikey", value: apiKey),
-            URLQueryItem(name: "t",      value: "search"),
-            URLQueryItem(name: "limit",  value: String(limit)),
-            URLQueryItem(name: "offset", value: String((page - 1) * limit)),
-            URLQueryItem(name: "q",      value: query)
-        ]
-        components.queryItems = queryItems
-        
-        guard let url = components.url else {
+
+        guard let url = JackettConfiguration.makeFeedURL(page: page, query: query, limit: limit) else {
             completion(nil, NSError(domain: "JackettManager", code: -1,
                                     userInfo: [NSLocalizedDescriptionKey: "Invalid Jackett URL."]))
             return
         }
-        
-        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+
+        let task = URLSession.shared.dataTask(with: url) { data, _, error in
             if let error = error {
                 DispatchQueue.main.async { completion(nil, error as NSError) }
                 return
             }
+
             guard let data = data else {
                 DispatchQueue.main.async {
                     completion(nil, NSError(domain: "JackettManager", code: -2,
@@ -358,10 +79,344 @@ class JackettManager {
                 }
                 return
             }
-            
-            let results = JackettXMLParser(data: data).parse()
+
+            guard let results = JackettXMLParser(data: data).parse() else {
+                DispatchQueue.main.async {
+                    completion(nil, NSError(domain: "JackettManager", code: -3,
+                                            userInfo: [NSLocalizedDescriptionKey: "Invalid XML response from Jackett."]))
+                }
+                return
+            }
+
             DispatchQueue.main.async { completion(results, nil) }
         }
+
         task.resume()
+    }
+}
+
+// MARK: - JackettMedia
+
+struct JackettMedia: Media, Hashable {
+    var title: String
+    var id: String
+    var tmdbId: Int?
+    var slug: String
+
+    var summary: String
+
+    var smallBackgroundImage: String?
+    var mediumBackgroundImage: String?
+    var largeBackgroundImage: String?
+
+    var posterURL: String?
+    var smallCoverImage: String? { posterURL }
+    var mediumCoverImage: String? { posterURL }
+    var largeCoverImage: String?
+
+    var subtitles: [String: [Subtitle]]
+    var torrents: [Torrent]
+
+    var isWatched: Bool
+    var isAddedToWatchlist: Bool
+
+    var publishDate: Date?
+    var category: String?
+    var sizeBytes: Int64
+
+    var mediaItemDictionary: [String: Any] {
+        [
+            MPMediaItemPropertyTitle: title,
+            MPMediaItemPropertyMediaType: NSNumber(value: MPMediaType.movie.rawValue),
+            MPMediaItemPropertyPersistentID: id,
+            MPMediaItemPropertyArtwork: smallCoverImage ?? "",
+            MPMediaItemPropertyBackgroundArtwork: smallBackgroundImage ?? "",
+            MPMediaItemPropertySummary: summary
+        ]
+    }
+
+    init(title: String,
+         id: String,
+         summary: String,
+         torrents: [Torrent],
+         posterURL: String? = nil,
+         sizeBytes: Int64 = 0,
+         publishDate: Date? = nil,
+         category: String? = nil) {
+        self.title = title
+        self.id = id
+        self.tmdbId = nil
+        self.slug = title.slugged
+        self.summary = summary
+        self.smallBackgroundImage = posterURL
+        self.mediumBackgroundImage = posterURL
+        self.largeBackgroundImage = posterURL
+        self.posterURL = posterURL
+        self.largeCoverImage = posterURL
+        self.subtitles = [:]
+        self.torrents = torrents
+        self.isWatched = false
+        self.isAddedToWatchlist = false
+        self.publishDate = publishDate
+        self.category = category
+        self.sizeBytes = sizeBytes
+    }
+
+    init?(_ mediaItemDictionary: [String: Any]) {
+        guard let id = mediaItemDictionary[MPMediaItemPropertyPersistentID] as? String,
+              let title = mediaItemDictionary[MPMediaItemPropertyTitle] as? String else {
+            return nil
+        }
+
+        let artwork = mediaItemDictionary[MPMediaItemPropertyArtwork] as? String
+        let summary = mediaItemDictionary[MPMediaItemPropertySummary] as? String ?? ""
+
+        self.init(title: title,
+                  id: id,
+                  summary: summary,
+                  torrents: [],
+                  posterURL: artwork)
+    }
+
+    init?(map: Map) {
+        self.init(title: "Unknown",
+                  id: UUID().uuidString,
+                  summary: "",
+                  torrents: [])
+    }
+
+    mutating func mapping(map: Map) {
+        switch map.mappingType {
+        case .fromJSON:
+            title <- map["title"]
+            id <- map["id"]
+            summary <- map["summary"]
+            posterURL <- map["posterURL"]
+            category <- map["category"]
+            torrents <- map["torrents"]
+            if let size: Int = try? map.value("sizeBytes") {
+                sizeBytes = Int64(size)
+            }
+            publishDate <- (map["publishDate"], DateTransform())
+            if slug.isEmpty { slug = title.slugged }
+
+        case .toJSON:
+            title >>> map["title"]
+            id >>> map["id"]
+            summary >>> map["summary"]
+            posterURL >>> map["posterURL"]
+            category >>> map["category"]
+            sizeBytes >>> map["sizeBytes"]
+            publishDate >>> map["publishDate"]
+            torrents >>> map["torrents"]
+        }
+    }
+
+    static func == (lhs: JackettMedia, rhs: JackettMedia) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+// MARK: - JackettXMLParser
+
+class JackettXMLParser: NSObject {
+    private let data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    func parse() -> [JackettMedia]? {
+        let parser = XMLParser(data: data)
+        let delegate = JackettXMLParserDelegate()
+        parser.delegate = delegate
+
+        if parser.parse() {
+            return delegate.items
+        }
+
+        return nil
+    }
+}
+
+class JackettXMLParserDelegate: NSObject, XMLParserDelegate {
+    var items: [JackettMedia] = []
+
+    private struct CurrentItem {
+        var title = ""
+        var link = ""
+        var guid = ""
+        var description = ""
+        var publishDate = ""
+        var category = ""
+        var enclosureURL = ""
+        var sizeFromElement: Int64 = 0
+        var sizeFromAttr: Int64 = 0
+        var seeders: Int = 0
+        var peers: Int = 0
+    }
+
+    private var currentItem: CurrentItem?
+    private var currentElement = ""
+
+    func parser(_ parser: XMLParser,
+                didStartElement elementName: String,
+                namespaceURI: String?,
+                qualifiedName qName: String?,
+                attributes attributeDict: [String : String] = [:]) {
+        currentElement = elementName
+
+        if elementName == "item" {
+            currentItem = CurrentItem()
+            return
+        }
+
+        guard var item = currentItem else { return }
+
+        if elementName == "enclosure" {
+            item.enclosureURL = attributeDict["url"] ?? ""
+        }
+
+        let normalizedElement = (qName ?? elementName).lowercased()
+        if normalizedElement == "torznab:attr" || elementName.lowercased() == "attr" {
+            let name = (attributeDict["name"] ?? "").lowercased()
+            let value = attributeDict["value"] ?? ""
+            switch name {
+            case "seeders":
+                item.seeders = Int(value) ?? item.seeders
+            case "peers":
+                item.peers = Int(value) ?? item.peers
+            case "size":
+                item.sizeFromAttr = Int64(value) ?? item.sizeFromAttr
+            case "category":
+                if item.category.isEmpty { item.category = value }
+            default:
+                break
+            }
+        }
+
+        currentItem = item
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        guard var item = currentItem else { return }
+
+        switch currentElement {
+        case "title":
+            item.title += string
+        case "link":
+            item.link += string
+        case "guid":
+            item.guid += string
+        case "description":
+            item.description += string
+        case "pubDate":
+            item.publishDate += string
+        case "category":
+            item.category += string
+        case "size":
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                item.sizeFromElement = Int64(trimmed) ?? item.sizeFromElement
+            }
+        default:
+            break
+        }
+
+        currentItem = item
+    }
+
+    func parser(_ parser: XMLParser,
+                didEndElement elementName: String,
+                namespaceURI: String?,
+                qualifiedName qName: String?) {
+        guard elementName == "item", let item = currentItem else { return }
+
+        defer { currentItem = nil }
+
+        let playableURL = firstNonEmpty(item.enclosureURL, item.link, item.guid)
+        guard !playableURL.isEmpty else {
+            return
+        }
+
+        let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            return
+        }
+
+        let sizeBytes = max(item.sizeFromElement, item.sizeFromAttr)
+        let summary = stripHTML(item.description).trimmingCharacters(in: .whitespacesAndNewlines)
+        let publishDate = parseDate(item.publishDate)
+        let poster = extractPosterURL(fromHTML: item.description)
+
+        let quality = inferQuality(from: title)
+        let sizeString = sizeBytes > 0 ? ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file) : nil
+        let torrent = Torrent(url: playableURL,
+                              quality: quality,
+                              seeds: item.seeders,
+                              peers: item.peers,
+                              size: sizeString)
+
+        let idSource = firstNonEmpty(item.guid, playableURL, title)
+        let media = JackettMedia(title: title,
+                                 id: stableID(from: idSource),
+                                 summary: summary.isEmpty ? title : summary,
+                                 torrents: [torrent],
+                                 posterURL: poster,
+                                 sizeBytes: sizeBytes,
+                                 publishDate: publishDate,
+                                 category: item.category.isEmpty ? nil : item.category)
+        items.append(media)
+    }
+
+    private func firstNonEmpty(_ values: String...) -> String {
+        values.first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private func stableID(from source: String) -> String {
+        let normalized = source.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? UUID().uuidString : normalized
+    }
+
+    private func inferQuality(from title: String) -> String {
+        let patterns = ["2160p", "1080p", "720p", "480p", "360p", "3D"]
+        let lower = title.lowercased()
+        if let match = patterns.first(where: { lower.contains($0.lowercased()) }) {
+            return match
+        }
+        return "Unknown"
+    }
+
+    private func parseDate(_ dateString: String) -> Date? {
+        let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        return formatter.date(from: trimmed)
+    }
+
+    private func stripHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+    }
+
+    private func extractPosterURL(fromHTML html: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "<img[^>]+src=[\"']([^\"']+)[\"']", options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        guard let match = regex.firstMatch(in: html, options: [], range: range),
+              match.numberOfRanges > 1,
+              let srcRange = Range(match.range(at: 1), in: html) else {
+            return nil
+        }
+
+        return String(html[srcRange])
     }
 }

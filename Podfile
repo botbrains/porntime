@@ -53,7 +53,6 @@ end
 target 'PopcornKit iOS' do
     platform :ios, '13.0'
     kitPods
-    pod 'google-cast-sdk', '~> 4.4'
 end
 
 post_install do |installer|

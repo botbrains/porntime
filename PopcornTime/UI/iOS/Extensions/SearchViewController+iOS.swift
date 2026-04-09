@@ -18,7 +18,15 @@ extension SearchViewController: UIToolbarDelegate {
         super.viewDidLoad()
         
         collectionViewController.paginated = false
-        
+
+        while segmentedControl.numberOfSegments > 2 {
+            segmentedControl.removeSegment(at: segmentedControl.numberOfSegments - 1, animated: false)
+        }
+        segmentedControl.setTitle("Library".localized, forSegmentAt: 0)
+        segmentedControl.setTitle("People".localized, forSegmentAt: 1)
+        segmentedControl.selectedSegmentIndex = 0
+        fetchType = .movies
+
         searchBar.keyboardAppearance = .dark
         collectionView?.contentInset.top = toolbar.frame.height
         
